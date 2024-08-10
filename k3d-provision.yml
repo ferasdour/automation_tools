@@ -1,0 +1,114 @@
+---
+- hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+   ansible_host_key_checking: false
+  tasks:
+  - name: papermill master
+    delegate_to: localhost
+    async: 9999
+    poll: 0
+    shell:
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/mast-prov -p hostname MasterNode -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 1024"
+    register: masterstatus
+  - name: papermill worker 1
+    delegate_to: localhost
+    async: 9999
+    poll: 0
+    register: work1status
+    shell:
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/node1-prov -p hostname WorkNode -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 1024"
+  - name: papermill worker 2
+    delegate_to: localhost
+    async: 9999
+    poll: 0
+    register: work2status
+    shell:
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/node2-prov -p hostname WorkNode2 -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 1024"
+  - name: wait for master task
+    ansible.builtin.async_status:
+     jid: "{{ masterstatus.ansible_job_id }}"
+    until: job_result.finished
+    register: job_result
+    retries: 9999
+    delay: 120
+  - name: wait for node1 task
+    ansible.builtin.async_status:
+     jid: "{{ work1status.ansible_job_id }}"
+    until: job_result.finished
+    register: job_result
+    retries: 9999
+    delay: 120
+  - name: wait for node2 task
+    ansible.builtin.async_status:
+     jid: "{{ work2status.ansible_job_id }}"
+    until: job_result.finished
+    register: job_result
+    retries: 9999
+    delay: 120
+  - name: develope new inventory
+    delegate_to: localhost
+    shell:
+     cmd: "for i in `ls /tmp/*-prov`; do cat $i |jq '.cells[]|.outputs'|grep -i \"IP Address:\"|awk -F \": \" '{print $2}'|tr -d '\\\\n\n\"'; done"
+    register: vmIPlist
+  - name: add hosts to inventory
+    ansible.builtin.add_host:
+     hostname: '{{ item }}'
+     ansible_ssh_host: '{{ item }}'
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
+  - name: Refresh inventory to ensure new instances exist in inventory
+    meta: refresh_inventory
+  - name: Gather facts
+    ansible.builtin.setup:
+    delegate_to: "{{ item }}"
+    delegate_facts: true
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
+  - name: Install a list of packages
+    ansible.builtin.apt:
+     pkg:
+      - ncat
+      - nmap
+      - wget
+      - podman
+      - qemu-system
+      - qemu-system-x86
+      - qemu-system-arm
+      - qemu-kvm 
+      - libvirt-daemon-system
+  - name: Download k3s installer
+    ansible.builtin.get_url:
+     url: https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
+     dest: /tmp/installk3.sh
+    when: "'Node' in ansible_nodename"
+  - name: Run k3 installer
+    ansible.builtin.command: bash /tmp/installk3.sh
+    when: "'Node' in ansible_nodename"
+  - name: k3s setup
+    blockinfile:
+     dest: /tmp/k3setup.sh
+     block: |
+      snap install kubectl --classic
+      sudo systemctl enable --now podman.socket
+      mkdir -p /etc/containers/containers.conf.d
+      echo 'service_timeout=0' > /etc/containers/containers.conf.d/timeout.conf
+      sudo ln -s /run/podman/podman.sock /var/run/docker.sock
+      echo "alias docker='podman'" >> /root/.bashrc
+      echo "alias docker='podman'" >> /home/ansible/.bashrc
+    when: "'Node' in ansible_nodename"
+  - name: register token
+    set_fact:
+        kubetoken: "{{ lookup('password', '/dev/null chars=ascii_letters,digit length=21', seed=inventory_hostname) }}"
+  - name: k3 master
+    blockinfile:
+     dest: /tmp/k3master.sh
+     block: |
+      k3d cluster create multiserver --servers 3  --token {{ kubetoken }} --api-port 6443
+      k3d node create newserver --cluster multiserver --role server
+    when: "'Master' in ansible_nodename and 'Node' in ansible_nodename"
+  - name: k3 worker
+    blockinfile:
+     dest: /tmp/k3worker.sh
+     block: |
+      k3d node create newserver --cluster multiserver --role agent --env K3S_URL=https://{{ masternodeip }}:6443 --token {{ kubetoken }}
+    when: "'Master' not in ansible_nodename and 'Node' in ansible_nodename"
