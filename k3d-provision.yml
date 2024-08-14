@@ -4,6 +4,7 @@
   become: yes
   vars:
    ansible_host_key_checking: false
+   ansible_ssh_timeout: 300
   tasks:
   - name: papermill master
     delegate_to: localhost
@@ -31,32 +32,41 @@
      jid: "{{ masterstatus.ansible_job_id }}"
     until: job_result.finished
     register: job_result
-    retries: 9999
+    retries: 30
     delay: 120
   - name: wait for node1 task
     ansible.builtin.async_status:
      jid: "{{ work1status.ansible_job_id }}"
     until: job_result.finished
     register: job_result
-    retries: 9999
+    retries: 30
     delay: 120
   - name: wait for node2 task
     ansible.builtin.async_status:
      jid: "{{ work2status.ansible_job_id }}"
     until: job_result.finished
     register: job_result
-    retries: 9999
+    retries: 30
     delay: 120
   - name: develope new inventory
     delegate_to: localhost
     shell:
-     cmd: "for i in `ls /tmp/*-prov`; do cat $i |jq '.cells[]|.outputs'|grep -i \"IP Address:\"|awk -F \": \" '{print $2}'|tr -d '\\\\n\n\"'; done"
+     cmd: "for i in `ls /tmp/*-prov`; do cat $i |jq '.cells[]|.outputs'|grep -i 'IP Address:' |grep -owE '[0-9\\.]{7,20}'"
     register: vmIPlist
+  - name: Print ips list
+    ansible.builtin.debug:
+     msg: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
   - name: add hosts to inventory
     ansible.builtin.add_host:
      hostname: '{{ item }}'
      ansible_ssh_host: '{{ item }}'
     loop: "{{ vmIPlist.stdout.split('\n') }}"
+  - name: Wait for cloud-init / user-data to finish
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
+    command: cloud-init status --wait
+    changed_when: false
   - name: Refresh inventory to ensure new instances exist in inventory
     meta: refresh_inventory
   - name: Gather facts
@@ -64,8 +74,14 @@
     delegate_to: "{{ item }}"
     delegate_facts: true
     loop: "{{ vmIPlist.stdout.split('\n') }}"
-  - name: Install a list of packages
+    ignore_errors: true
+  - name: Install packages
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
     ansible.builtin.apt:
+     lock_timeout: 300
+     update_cache: yes
+     state: latest
      pkg:
       - ncat
       - nmap
@@ -76,15 +92,27 @@
       - qemu-system-arm
       - qemu-kvm 
       - libvirt-daemon-system
+  - name: upgrade packages
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
+    ansible.builtin.apt:
+     upgrade: yes
+     lock_timeout: 300
+     update_cache: yes
   - name: Download k3s installer
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
     ansible.builtin.get_url:
      url: https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
      dest: /tmp/installk3.sh
     when: "'Node' in ansible_nodename"
   - name: Run k3 installer
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
     ansible.builtin.command: bash /tmp/installk3.sh
-    when: "'Node' in ansible_nodename"
   - name: k3s setup
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
     blockinfile:
      dest: /tmp/k3setup.sh
      block: |
@@ -95,20 +123,28 @@
       sudo ln -s /run/podman/podman.sock /var/run/docker.sock
       echo "alias docker='podman'" >> /root/.bashrc
       echo "alias docker='podman'" >> /home/ansible/.bashrc
-    when: "'Node' in ansible_nodename"
+    when: "'Node' in {{ ansible_nodename }}"
   - name: register token
     set_fact:
         kubetoken: "{{ lookup('password', '/dev/null chars=ascii_letters,digit length=21', seed=inventory_hostname) }}"
+  - name: register ip
+    set_fact:
+        masternodeip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+    when: "'Master' in ansible_nodename and 'Node' in ansible_nodename"
   - name: k3 master
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
     blockinfile:
      dest: /tmp/k3master.sh
      block: |
       k3d cluster create multiserver --servers 3  --token {{ kubetoken }} --api-port 6443
       k3d node create newserver --cluster multiserver --role server
-    when: "'Master' in ansible_nodename and 'Node' in ansible_nodename"
+    when: "'Master' in {{ ansible_nodename }} and 'Node' in {{ ansible_nodename }}"
   - name: k3 worker
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
     blockinfile:
      dest: /tmp/k3worker.sh
      block: |
       k3d node create newserver --cluster multiserver --role agent --env K3S_URL=https://{{ masternodeip }}:6443 --token {{ kubetoken }}
-    when: "'Master' not in ansible_nodename and 'Node' in ansible_nodename"
+    when: "'Master' not in {{ ansible_nodename }} and 'Node' in {{ ansible_nodename }}"
