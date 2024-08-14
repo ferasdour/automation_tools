@@ -51,7 +51,7 @@
   - name: develope new inventory
     delegate_to: localhost
     shell:
-     cmd: "for i in `ls /tmp/*-prov`; do cat $i |jq '.cells[]|.outputs'|grep -i 'IP Address:' |grep -owE '[0-9\\.]{7,20}'"
+     cmd: "for i in `ls /tmp/*-prov`; do cat $i |jq '.cells[]|.outputs'|grep -i 'IP Address:' |grep -owE '[0-9.]{7,20}'; done"
     register: vmIPlist
   - name: Print ips list
     ansible.builtin.debug:
