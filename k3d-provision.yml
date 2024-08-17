@@ -117,6 +117,7 @@
     blockinfile:
      dest: /tmp/k3setup.sh
      block: |
+      pipenv run pip install git+git://github.com/jupyterlab/jupyterlab.git#egg=jupyterlab
       snap install kubectl --classic
       sudo systemctl enable --now podman.socket
       mkdir -p /etc/containers/containers.conf.d
