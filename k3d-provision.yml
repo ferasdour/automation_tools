@@ -67,7 +67,8 @@
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     command: cloud-init status --wait
-    changed_when: false
+    register: output
+    until: "'status: done' in output.stdout"
   - name: Refresh inventory to ensure new instances exist in inventory
     meta: refresh_inventory
   - name: Gather facts
