@@ -63,12 +63,15 @@
      hostname: '{{ item }}'
      ansible_ssh_host: '{{ item }}'
     loop: "{{ vmIPlist.stdout.split('\n') }}"
-  - name: Wait for cloud-init / user-data to finish
+  - name: Wait for cloud init to finish
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
-    command: cloud-init status --wait
-    register: output
-    until: "'status: done' in output.stdout"
+    community.general.cloud_init_data_facts:
+     filter: status
+    register: res
+    until: "res.cloud_init_data_facts.status.v1.stage is defined and not res.cloud_init_data_facts.status.v1.stage"
+    retries: 100
+    delay: 300
   - name: Refresh inventory to ensure new instances exist in inventory
     meta: refresh_inventory
   - name: Gather facts
