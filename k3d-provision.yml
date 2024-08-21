@@ -108,8 +108,8 @@
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     ansible.builtin.get_url:
-     url: https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh
-     dest: /tmp/installk3.sh
+     url: "https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh"
+     dest: "/tmp/installk3.sh"
     when: "'Node' in ansible_nodename"
   - name: Run k3 installer
     delegate_to: "{{ item }}"
