@@ -114,7 +114,7 @@
   - name: Run k3 installer
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
-    ansible.builtin.command: bash /tmp/installk3.sh
+    ansible.builtin.command: "/bin/bash /tmp/installk3.sh"
   - name: k3s setup
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
