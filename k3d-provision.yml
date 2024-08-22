@@ -141,7 +141,7 @@
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     blockinfile:
-     dest: /tmp/k3master.sh
+     dest: /tmp/k3setup.sh
      block: |
       k3d cluster create multiserver --servers 3  --token {{ kubetoken }} --api-port 6443
       k3d node create newserver --cluster multiserver --role server
@@ -150,7 +150,11 @@
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     blockinfile:
-     dest: /tmp/k3worker.sh
+     dest: /tmp/k3setup.sh
      block: |
       k3d node create newserver --cluster multiserver --role agent --env K3S_URL=https://{{ masternodeip }}:6443 --token {{ kubetoken }}
     when: "'Master' not in {{ ansible_nodename }} and 'Node' in {{ ansible_nodename }}"
+  - name: Run k3 setup
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
+    ansible.builtin.command: "/bin/bash /tmp/k3setup.sh"
