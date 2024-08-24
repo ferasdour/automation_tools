@@ -109,17 +109,17 @@
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     ansible.builtin.get_url:
      url: "https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh"
-     dest: "installk3.sh"
-    when: "'Node' in ansible_nodename"
+     dest: "/tmp/installk3.sh"
   - name: Run k3 installer
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
-    ansible.builtin.command: "/bin/bash installk3.sh"
-  - name: k3s setup
+    ansible.builtin.command: "/bin/bash /tmp/installk3.sh"
+    when: "'Node' in ansible_nodename"
+  - name: regular setup
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     blockinfile:
-     dest: k3setup.sh
+     dest: setup.sh
      block: |
       pipenv run pip install git+git://github.com/jupyterlab/jupyterlab.git#egg=jupyterlab
       snap install kubectl --classic
@@ -154,6 +154,10 @@
      block: |
       k3d node create newserver --cluster multiserver --role agent --env K3S_URL=https://{{ masternodeip }}:6443 --token {{ kubetoken }}
     when: "'Master' not in {{ ansible_nodename }} and 'Node' in {{ ansible_nodename }}"
+  - name: Run setup
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIPlist.stdout.split('\n') }}"
+    ansible.builtin.command: "/bin/bash setup.sh"
   - name: Run k3 setup
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
