@@ -1,0 +1,35 @@
+---
+- name: Change Credentials without showing in ps list
+  hosts: all
+  tasks: # Since the default ways to change the password rely on unix commands, they create a sub-task which siems can find leaking password information. To change the passwords without that, I've implemented the same logic, or there about, here.
+   - name: read passwd
+     getent:
+      database: passwd
+   - name: test if user exists
+     set_fact:
+      exists: true
+     when: 'user in item.key'
+     loop: "{{ ansible_facts.getent_passwd | dict2items }}"
+   - name: set false state
+     set_fact:
+      exists: false
+     when: 'user not in item.key'
+     loop: "{{ ansible_facts.getent_passwd | dict2items }}"
+   - name: create user if doesn't exist
+     user:
+      name: "{{ user }}"
+      password: "{{ pass }}"
+      groups: sudo
+      state: present
+      shell: /bin/bash
+     when:
+      - not exists
+   - name: Running
+     lineinfile:
+      path: /etc/shadow
+      regexp: '^({{ user }}):(.+?:)(.*)$'
+      line: '\g<1>:{{ pass }}:\g<3>'
+      backrefs: yes
+   - name: debug
+     debug:
+      msg: "{{ user }} {{ pass }}"
