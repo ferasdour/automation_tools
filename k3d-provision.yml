@@ -11,7 +11,7 @@
     async: 9999
     poll: 0
     shell:
-     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/mast-prov -p hostname MasterNode -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 1024"
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/mast-prov -p hostname MasterNode -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 512"
     register: masterstatus
   - name: papermill worker 1
     delegate_to: localhost
@@ -19,14 +19,14 @@
     poll: 0
     register: work1status
     shell:
-     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/node1-prov -p hostname WorkNode -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 1024"
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/node1-prov -p hostname WorkNode -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 512"
   - name: papermill worker 2
     delegate_to: localhost
     async: 9999
     poll: 0
     register: work2status
     shell:
-     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/node2-prov -p hostname WorkNode2 -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 1024"
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/node2-prov -p hostname WorkNode2 -p domainname kube -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 512"
   - name: wait for master task
     ansible.builtin.async_status:
      jid: "{{ masterstatus.ansible_job_id }}"
@@ -84,7 +84,7 @@
     delegate_to: "{{ item }}"
     loop: "{{ vmIPlist.stdout.split('\n') }}"
     ansible.builtin.apt:
-     lock_timeout: 300
+     lock_timeout: 900
      update_cache: yes
      state: latest
      pkg:
@@ -121,6 +121,7 @@
     blockinfile:
      dest: setup.sh
      block: |
+      pip install --upgrade --break-system-packages pip pipenv
       pipenv run pip install git+git://github.com/jupyterlab/jupyterlab.git#egg=jupyterlab
       snap install kubectl --classic
       sudo systemctl enable --now podman.socket
