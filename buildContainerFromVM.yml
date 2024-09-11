@@ -1,0 +1,92 @@
+---
+- hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+   ansible_host_key_checking: false
+   ansible_ssh_timeout: 
+   feemcotechVersion: 0.0.1
+  tasks:
+  - name: papermill provision vm
+    delegate_to: localhost
+    async: 9999
+    poll: 0
+    shell:
+     cmd: "papermill /share/public-git-repos/automation-tools/libvirt-provision.ipynb /tmp/container-prov -p hostname container -p domainname feemcotech -p url http://10.42.0.1:8000/isos/noble-server-cloudimg-amd64.img -p os_variant ubuntu-stable-latest -p size 40G -p ram 4028"
+    register: status
+  - name: wait for provision task
+    ansible.builtin.async_status:
+     jid: "{{ status.ansible_job_id }}"
+    until: job_result.finished
+    register: job_result
+    retries: 300
+    delay: 300
+  - name: grab ip address
+    delegate_to: localhost
+    shell:
+     cmd: |
+      cat /tmp/container-prov |jq '.cells[]|.outputs'|grep -i 'IP Address:' |grep -owE '[0-9.]{7,20}'
+    register: vmIP
+  - name: Install packages
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIP.stdout.split('\n') }}"
+    ansible.builtin.apt:
+     lock_timeout: 900
+     update_cache: yes
+     state: latest
+     pkg:
+      - ncat
+      - 7zip
+      - git
+      - nmap
+      - wget
+      - nano
+      - podman
+      - qemu-system
+      - qemu-system-x86
+      - qemu-system-arm
+      - qemu-kvm
+      - libvirt-daemon-system
+  - name: setup vm 1
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIP.stdout.split('\n') }}"
+    shell: |
+      apt update; apt full-upgrade -y; apt dist-upgrade -y; apt update -y; apt upgrade -y
+      pip install --upgrade --break-system-packages pip pipenv
+      pipenv run pip install git+git://github.com/jupyterlab/jupyterlab.git#egg=jupyterlab
+      sudo systemctl enable --now podman.socket
+      mkdir -p /etc/containers/containers.conf.d
+      echo 'service_timeout=0' > /etc/containers/containers.conf.d/timeout.conf
+      sudo ln -s /run/podman/podman.sock /var/run/docker.sock
+      echo "alias docker='podman'" >> /root/.bashrc
+      echo "alias docker='podman'" >> /home/ansible/.bashrc
+  - name: setup vm 2
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIP.stdout.split('\n') }}"
+    shell: |
+     snap install kubectl --classic
+     sudo snap install --classic go
+  - name: setup vm 3
+    delegate_to: "{{ item }}"
+    loop: "{{ vmIP.stdout.split('\n') }}"
+    shell: |
+     cd /root/
+     wget  https://github.com/projectdiscovery/pdtm/releases/download/v0.0.9/pdtm_0.0.9_linux_amd64.zip
+     7z x pdtm*.zip
+     ./pdtm --ia
+  - name: grab container fullnameapt 
+    delegate_to: localhost
+    shell: |
+      cat /tmp/container-prov |jq '.cells[]|.outputs'|grep -i "local-hostname:"|grep -owE '[a-z0-9A-Z]+\.[a-za-Z]+\.[a-zA-Z]+\.[a-zA-Z]+'
+    register: containername
+  - name: convert vm to container
+    delegate_to: localhost
+    shell: |
+      virsh destroy {{ containername.stdout }}
+      sleep 10
+      guestmount -o allow_other -a /share/vms/disks/{{ containername.stdout.split('.')[0] }}/{{ containername.stdout }}.img -m /dev/sda1 /tmp/tmp-containter
+      tar -czf /share/container-feemcotech.tar /tmp/tmp-container
+      docker import /share/container-feemcotech.tar feemcotech:{{ feemcotechVersion }}
+      docker image ls |grep -i feemco
+      umount /tmp/tmp-container
+
