@@ -79,14 +79,26 @@
     shell: |
       cat /tmp/container-prov |jq '.cells[]|.outputs'|grep -i "local-hostname:"|grep -owE '[a-z0-9A-Z]+\.[a-za-Z]+\.[a-zA-Z]+\.[a-zA-Z]+'
     register: containername
-  - name: convert vm to container
+  - name: shut down vm
     delegate_to: localhost
     shell: |
       virsh destroy {{ containername.stdout }}
       sleep 10
+  - name: mount disk to tmp
+    delegate_to: localhost
+    shell: |
       guestmount -o allow_other -a /share/vms/disks/{{ containername.stdout.split('.')[0] }}/{{ containername.stdout }}.img -m /dev/sda1 /tmp/tmp-containter
-      tar -czf /share/container-feemcotech.tar /tmp/tmp-container
+  - name: tar tmp mount
+    delegate_to: localhost
+    shell: |
+      tar -C / -czf /share/container-feemcotech.tar tmp/tmp-container
+  - name: import into docker
+    delegate_to: localhost
+    shell: |
       docker import /share/container-feemcotech.tar feemcotech:{{ feemcotechVersion }}
       docker image ls |grep -i feemco
+  - name: umount disk
+    delegate_to: localhost
+    shell: |
       umount /tmp/tmp-container
 
