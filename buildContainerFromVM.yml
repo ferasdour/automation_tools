@@ -91,7 +91,7 @@
   - name: tar tmp mount
     delegate_to: localhost
     shell: |
-      tar -C /tmp -czf /share/container-feemcotech.tar tmp-container
+      tar -C /tmp -czf /share/container-feemcotech.tar /tmp-container
   - name: import into docker
     delegate_to: localhost
     shell: |
