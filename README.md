@@ -12,6 +12,3 @@ Current Files:
 - k3d-provision.yml: using the libvirt provisioning tool, papermill, and ansible, making a way to create multi-vm/multi-node k3s deployment.
 -- example: ansible-playbook -i localhost, k3d-provision.yml -u ansible -T 90 --ask-become-pass
 
-
-testing drawio:
-![drawio](/Untitled%20Diagram.drawio)
