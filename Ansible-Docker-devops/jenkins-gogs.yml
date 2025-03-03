@@ -1,0 +1,52 @@
+---
+- hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+   ansible_host_key_checking: false
+   ansible_ssh_timeout: 300
+  tasks:
+   - name: Create jenkins dir
+     ansible.builtin.file:
+      path: /volume1/Data/jenkins
+      state: directory
+      mode: '777'
+   - name: Create gogs dir
+     ansible.builtin.file:
+      path: /volume1/Data/gogs
+      state: directory
+      mode: '777'
+   - name: start jenkins
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker run --name jenkins-dev --rm -p 7080:8080 -v /volume1/Data/jenkins:/var/jenkins_home jenkins/jenkins:lts
+     async: 9999
+     poll: 0
+     register: jenkinstask
+   - name: start gogs
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker run --rm --name gogs -p 7022:22 -p 10880:3000 -v /volume1/Data/gogs:/data gogs/gogs
+     async: 9999
+     poll: 0
+     register: gogstask
+   - name: wait for jenkins task
+     ansible.builtin.async_status:
+      jid: "{{ jenkinstask.ansible_job_id }}"
+     until: job_result.finished
+     register: job_result
+     retries: 300
+     delay: 300
+   - name: wait for gogs task
+     ansible.builtin.async_status:
+      jid: "{{ gogstask.ansible_job_id }}"
+     until: job_result.finished
+     register: job_result
+     retries: 300
+     delay: 300
+   - name: start get jenkins password
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker exec jenkins-dev cat /var/jenkins_home/secrets/initialAdminPassword
+      register: jenkinsPass
+   - name: print pass
+     debug:
+      msg: "{{ jenkinsPass.stdout }}"
+
