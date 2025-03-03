@@ -49,7 +49,7 @@
       cmd: /usr/local/bin/docker-compose -f generate-indexer-certs.yml run --rm generator
      args:
       chdir: /volume1/Data/wazuh-docker/single-node/
-   - name: permissions fix (just in case)
+   - name: permissions fix (just in case | in part because the filesystem is shared via smb, so it gets funky permissions if not 777)
      ansible.builtin.command:
       cmd: chmod -R 777 /volume1/Data/wazuh-docker
    - name: Don't want to use docker ansible module here, need direct commands ran

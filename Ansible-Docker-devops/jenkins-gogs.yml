@@ -19,13 +19,13 @@
    - name: start jenkins
      ansible.builtin.command:
       cmd: /usr/local/bin/docker run --name jenkins-dev --rm -p 7080:8080 -v /volume1/Data/jenkins:/var/jenkins_home jenkins/jenkins:lts
-     async: 9999
+     async: 30
      poll: 0
      register: jenkinstask
    - name: start gogs
      ansible.builtin.command:
       cmd: /usr/local/bin/docker run --rm --name gogs -p 7022:22 -p 10880:3000 -v /volume1/Data/gogs:/data gogs/gogs
-     async: 9999
+     async: 30
      poll: 0
      register: gogstask
    - name: wait for jenkins task
