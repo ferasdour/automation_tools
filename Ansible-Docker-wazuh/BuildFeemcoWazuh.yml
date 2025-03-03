@@ -1,0 +1,69 @@
+---
+- hosts: all
+  gather_facts: yes
+  become: yes
+  vars:
+   ansible_host_key_checking: false
+   ansible_ssh_timeout: 300
+   password: "{{ lookup('ansible.builtin.password', '/dev/null', seed=inventory_hostname, length=22) }}"
+   notes: "ansible-playbook -i familystorage, BuildWazuh.yml -u jeff -e ansible_python_interpreter=/bin/python -K"
+  tasks:
+   - name: Clone Latest
+     local_action:
+       module: ansible.builtin.git
+       repo: git@github.com:wazuh/wazuh-docker.git
+       dest: /tmp/wazuh-docker
+       version: v4.11.0
+   - name: move to server
+     copy:
+      src: /tmp/wazuh-docker/
+      dest: /volume1/Data/wazuh-docker/
+      mode: '0777'
+   - name: Delay because filesystem sync
+     pause:
+      seconds: 60
+   - name: Change port
+     ansible.builtin.lineinfile:
+      path: /volume1/Data/wazuh-docker/single-node/docker-compose.yml
+      search_string: "443:5601"
+      line: "      - 3443:5601"
+   - name: change password in compose file
+     ansible.builtin.replace:
+      path: /volume1/Data/wazuh-docker/single-node/docker-compose.yml
+      regexp: "SecretPassword"
+      replace: "{{ password }}"
+   - name: missing directory fix
+     ansible.builtin.command:
+      cmd: mkdir /volume1/Data/wazuh-docker/single-node/config/wazuh_indexer_ssl_certs
+   - name: generate password hash
+     ansible.builtin.command:
+      cmd: bash -c "/usr/local/bin/docker run --rm wazuh/wazuh-indexer:4.11.0 bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/hash.sh -p {{ password }} | grep -iv '\*'"
+     register: hashed_password
+   - name: change password
+     ansible.builtin.replace:
+      path : /volume1/Data/wazuh-docker/single-node/config/wazuh_indexer/internal_users.yml
+      regexp: '\$2y\$12\$K/SpwjtB\.wOHJ/Nc6GVRDuc1h0rM1DfvziFRNPtk27P\.c4yDr9njO'
+      replace: '{{ hashed_password.stdout }}'
+   - name: generate certs
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker-compose -f generate-indexer-certs.yml run --rm generator
+     args:
+      chdir: /volume1/Data/wazuh-docker/single-node/
+   - name: permissions fix (just in case)
+     ansible.builtin.command:
+      cmd: chmod -R 777 /volume1/Data/wazuh-docker
+   - name: Don't want to use docker ansible module here, need direct commands ran
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker-compose up -d
+     args:
+      chdir: /volume1/Data/wazuh-docker/single-node/
+   - name: Enable Vulns
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker exec -it single-node-wazuh.manager-1 bash -c 'sed -i s/"vulnerability-detection.disable_scan_manager=1"/"vulnerability-detection.disable_scan_manager=0"/g /var/ossec/etc/internal_options.conf'
+   - name: Start Modulesd
+     ansible.builtin.command:
+      cmd: /usr/local/bin/docker exec single-node-wazuh.manager-1 /var/ossec/bin/wazuh-modulesd
+   - name: print password
+     ansible.builtin.debug:
+      msg:
+      - "Admin Password: {{ password }}"
