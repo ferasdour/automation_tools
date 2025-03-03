@@ -60,7 +60,7 @@
    - name: Enable Vulns
      ansible.builtin.command:
       cmd: /usr/local/bin/docker exec -it single-node-wazuh.manager-1 bash -c 'sed -i s/"vulnerability-detection.disable_scan_manager=1"/"vulnerability-detection.disable_scan_manager=0"/g /var/ossec/etc/internal_options.conf'
-   - name: Start Modulesd
+   - name: Start Modulesd (https://github.com/wazuh/wazuh-dashboard-plugins/issues/6861#issuecomment-2695149492)
      ansible.builtin.command:
       cmd: /usr/local/bin/docker exec single-node-wazuh.manager-1 /var/ossec/bin/wazuh-modulesd
    - name: print password
