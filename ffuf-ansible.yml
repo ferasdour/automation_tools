@@ -1,0 +1,63 @@
+---
+- hosts: all # This playbook was entirely created by hf.co/reedmayhew/claude-3.7-sonnet-reasoning-gemma3-12B with multiple itterations of telling it to check for problems.
+  gather_facts: false
+  tasks:
+  - name: Install required tools
+    become: true
+    package:
+      name:
+        - scp
+        - ffuf
+      state: present
+
+  - name: Create temporary directory
+    become: true
+    file:
+      path: /tmp/wordlist_sections
+      state: directory
+      mode: 0755
+      owner: "{{ ansible_user }}"
+      group: "{{ ansible_user }}"
+
+  - name: Split wordlist
+    command: "split -l {{ section_size }} {{ wordlist_file }} /tmp/wordlist_section_"
+    register: split_result
+    when: wordlist_size is defined
+    # Check if the split command was successful
+    failed_when: split_result.rc != 0
+
+  - name: Execute Ffuf concurrently
+    command: "ffuf -w /tmp/wordlist_section_$i.txt -u https://example.com/login -fs 200"
+    register: ffuf_result
+    when: wordlist_size is defined
+    loop: "{{ range(1, num_hosts + 1) | list }}"
+    async: 1
+    poll: 10
+    # Check for specific error patterns in the ffuf output
+    failed_when: "'error' in ffuf_result.stdout"
+
+  - name: Wait for all Ffuf processes to complete
+    wait_for:
+      host: "{{ item }}"
+      port: 443
+      state: started
+      timeout: 60
+    loop: "{{ groups['all'] }}"
+    when: wordlist_size is defined
+
+  - name: Save Ffuf results
+    copy:
+      content: "{{ ffuf_result.stdout }}"
+      dest: "/tmp/ffuf_results/{{ inventory_hostname }}.txt"
+      when: inventory_hostname in groups['all'] and ffuf_result is defined
+
+  - name: Remove temporary directory
+    file:
+      path: /tmp/wordlist_sections
+      state: absent
+    when: wordlist_size is defined
+
+  vars:
+    wordlist_file: /path/to/your/wordlist.txt
+    num_hosts: "{{ inventory_hosts | length }}"
+    section_size: 10000 # Example value, adjust as needed
