@@ -100,5 +100,5 @@
   - name: umount disk
     delegate_to: localhost
     shell: |
-      umount /tmp/tmp-container
+      guestunmount /tmp/tmp-container
 
