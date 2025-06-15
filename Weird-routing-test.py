@@ -22,7 +22,8 @@ import logging
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 from scapy.all import *
 import ipaddress, netifaces, re
-from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 routes=[]
 gateways=netifaces.gateways()
@@ -41,7 +42,7 @@ def arpips():
  return ips
 
 def loop(addr):
- print("test: %s" % str(addr))
+ #print("test: %s" % str(addr))
  ans, unans = traceroute(str(addr),verbose=0)
  suspicious=[]
  try:
@@ -54,15 +55,21 @@ def loop(addr):
   pass
  return set(suspicious)
 
+def rangeloop(r):
+  print("Starting Range: %s" % r)
+  for addr in ipaddress.IPv4Network(r):
+   with ThreadPoolExecutor(max_workers=10) as traceexecutor:
+    tracefutures=[]
+    if str(addr) not in arp:
+     tracefutures.append(traceexecutor.submit(loop, addr))
+    for f in concurrent.futures.as_completed(tracefutures):
+     if len(f.result()) != 0:
+         print("Possible: %s" % f.result())
+
 arp=arpips()
 ranges=['192.168.0.0/16', '172.16.0.0/12', '224.0.0.0/4']
-with ThreadPoolExecutor(max_workers=10) as executor:
-    futures = []
-    for r in ranges:
-        print("Range: %s" % r)
-        for addr in ipaddress.IPv4Network(r):
-            if str(addr) not in arp:
-                futures.append(executor.submit(loop, addr))
-    for f in futures:
-        for ip in f.result():
-            print("Possible: %s" % ip)
+with ProcessPoolExecutor(max_workers=3) as rangeexecutor:
+ rangefutures=[]
+ for r in ranges:
+  rangeexecutor.submit(rangeloop, r)
+concurrent.futures.as_completed(rangefutures)
