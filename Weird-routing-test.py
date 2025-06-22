@@ -67,7 +67,7 @@ def rangeloop(r):
          print("Possible: %s" % f.result())
 
 arp=arpips()
-ranges=['192.168.0.0/16', '172.16.0.0/12', '224.0.0.0/4']
+ranges=['172.16.0.0/12']
 with ProcessPoolExecutor(max_workers=3) as rangeexecutor:
  rangefutures=[]
  for r in ranges:
