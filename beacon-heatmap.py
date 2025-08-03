@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Do not use this illegally, cops won't have trouble catching you
 import os
 import re
 import time
@@ -213,7 +214,7 @@ class LiveFeed:
                     os.system("ristretto heatmap.png &")
                     self.start()
                 else:
-                    self.conn   = init_db(self.db_path)
+                    self.conn = init_db(self.db_path)
                     self.cursor = self.conn.cursor()
                     self.insert_count = 0
                     self.start()
