@@ -1,7 +1,7 @@
 #!/bin/bash
 read -p "Enter github orgname: " org
 echo "running trufflehog against $org"
-docker run --rm -it --log-driver=none -a stdin -a stdout -a stderr trufflesecurity/trufflehog:latest github --org=$org --issue-comments --pr-comments 2>&1 >> /tmp/tmp-trufflehog
+docker run --rm -it --log-driver=none -a stdin -a stdout -a stderr trufflesecurity/trufflehog:latest github --org="$org" --issue-comments --pr-comments 2>&1 >> /tmp/tmp-trufflehog
 echo "Trufflehog complete, lets try to see if we can grab username/password lists from the results"
 echo "-- combolist --"
 grep -i "Raw result:" /tmp/tmp-trufflehog |grep "\@"| sed s/":\/\/"/" "/g|awk -F "@" '{print $1}'|awk '{print $4}'|sort -u > /tmp/tmp-trufflehog-userpass

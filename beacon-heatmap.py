@@ -183,7 +183,7 @@ class LiveFeed:
         threading.Thread(target=self.run_sniff, daemon=True).start()
         try:
             while True:
-                os.system("cls" if os.name == "nt" else "clear")
+                print(b"\033[H\033[J")
                 print(f"Live 60s feed — {time.strftime('%H:%M:%S')}\n")
                 stats = [(h, len(self.recent.get(h, [])))
                          for h in self.recent if self.recent[h]]

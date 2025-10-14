@@ -90,13 +90,13 @@ def runAllOnceWithoutTree(word):
 		substitutions(word)
 
 def writeToFile(word):
-	open('fastrack.txt-tmp', 'a').write(word+"\n")
+	open('fastrack.txt-tmp',encoding='utf-8', 'a').write(word+"\n")
 
 
 for each in commonWords:
 		writeToFile(each)
 		runAllOnceWithoutTree(each)
-with open('fastrack.txt-tmp','r') as file:
+with open('fastrack.txt-tmp',encoding='utf-8',mode='r') as file:
 	for each in file.readlines():
 		runAllOnceWithoutTree(each.replace('\n',''))
 # second run just to ensure nothing gets missed :D
@@ -105,7 +105,7 @@ with open('fastrack.txt-tmp','r') as file:
 		runAllOnceWithoutTree(each.replace('\n',''))
 # Cleanup Duplicates
 seen_lines = set()
-with open("fastrack.txt-tmp", 'r') as infile, open("fastrack.txt", 'w') as outfile:
+with open("fastrack.txt-tmp", 'r') as infile, open("fastrack.txt",encoding='utf-8', mode='w') as outfile:
 	for line in infile:
 		if line not in seen_lines:
 			seen_lines.add(line)
