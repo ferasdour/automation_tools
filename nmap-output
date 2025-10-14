@@ -1,9 +1,0 @@
-# Nmap 7.94SVN scan initiated Tue Sep 30 18:25:07 2025 as: nmap -sn --traceroute -oN nmap-output 172.16.10.1
-Nmap scan report for 172.16.10.1
-Host is up (0.0022s latency).
-
-TRACEROUTE (using port 80/tcp)
-HOP RTT     ADDRESS
-1   2.60 ms 172.16.10.1
-
-# Nmap done at Tue Sep 30 18:25:33 2025 -- 1 IP address (1 host up) scanned in 26.17 seconds
