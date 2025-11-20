@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Do not use this illegally, cops won't have trouble catching you
 import os
+import sys
 import re
 import time
 import threading
@@ -15,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from scapy.all import *
 from pwn import log
+from PIL import Image
 
 BROADCAST = "ff:ff:ff:ff:ff:ff"
 DB_SCHEMA = """
@@ -61,7 +63,10 @@ def hop_channels(iface, channels, dwell=5):
     def hopper():
         idx = 0
         while True:
-            ch = channels[idx % len(channels)]
+            if not len(channels)==0:    
+                ch = channels[idx % len(channels)]
+            else:
+                ch = 1
             subprocess.run(["iwconfig", iface, "channel", str(ch)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             time.sleep(dwell)
             idx += 1
@@ -177,13 +182,23 @@ class LiveFeed:
     def run_sniff(self):
         sniff(iface=self.iface, prn=self.process_packet, store=False)
 
+    def clear_stdout():
+        sys.stdout.buffer.write(b"\033[H\033[J")
+        sys.stdout.flush()
+        if os.name == 'nt':
+            subprocess.run("cls", shell=True)
+        else:
+            subprocess.run("clear", shell=True)
+
+
+
     def start(self):
         channels = get_supported_channels(self.iface)
         hop_channels(self.iface, channels, dwell=3)
         threading.Thread(target=self.run_sniff, daemon=True).start()
         try:
             while True:
-                print(b"\033[H\033[J")
+                self.clear_stdout
                 print(f"Live 60s feed — {time.strftime('%H:%M:%S')}\n")
                 stats = [(h, len(self.recent.get(h, [])))
                          for h in self.recent if self.recent[h]]
@@ -211,7 +226,9 @@ class LiveFeed:
                 if mac:
                     plot_full_week(self.db_path, mac)
                     time.sleep(2)
-                    os.system("ristretto heatmap.png &")
+#                    os.system("ristretto heatmap.png &")
+                    image=Image.open("heatmap.png")
+                    image.show()
                     self.start()
                 else:
                     self.conn = init_db(self.db_path)
